@@ -1,0 +1,33 @@
+# Node.js y Dependencias
+node_modules/
+
+# Variables de Entorno (¡MUY IMPORTANTE PARA SEGURIDAD!)
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# Salida de los builds (Vite y React compilan aquí)
+dist/
+dist-ssr/
+build/
+out/
+
+# Logs de error
+logs
+*.log
+npm-debug.log*
+
+# Archivos propios del Sistema Operativo
+.DS_Store
+Thumbs.db
+
+# Configuraciones de editores de código
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
