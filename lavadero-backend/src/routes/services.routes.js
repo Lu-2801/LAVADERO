@@ -1,12 +1,16 @@
 import { Router } from "express";
-import {getServices } from "../controllers/services.controller.js";
+import {
+  getServices,
+  getAdminServices,
+  createService,
+  updateService
+} from "../controllers/services.controller.js";
 
 const router = Router();
 
-// GET /bookings?fecha=YYYY-MM-DD
-// router.get("/", getBookings);
-
-// POST /bookings
 router.get("/", getServices);
+router.get("/admin", getAdminServices);
+router.post("/", createService);
+router.put("/:id", updateService);
 
 export default router;

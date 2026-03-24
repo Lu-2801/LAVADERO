@@ -1,6 +1,10 @@
 // src/controllers/days.controller.js
 import { obtenerDias, guardarDia } from "../services/days.service.js";
 
+const getArgentinaDate = () => {
+  return new Date(new Date().toLocaleString("en-US", { timeZone: "America/Argentina/Buenos_Aires" }));
+};
+
 export const getDays = async (req, res) => {
   try {
     const { desde, hasta } = req.query;
@@ -24,6 +28,12 @@ export const setDay = async (req, res) => {
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
       return res.status(400).json({ error: "Formato de fecha inválido. Use YYYY-MM-DD" });
+    }
+
+    const nowAR = getArgentinaDate();
+    const todayStr = nowAR.toLocaleDateString('en-CA');
+    if (fecha < todayStr) {
+      return res.status(400).json({ error: "No se pueden configurar días pasados." });
     }
 
     const nuevoDia = await guardarDia({ fecha, abierto, hora_inicio, hora_fin });
