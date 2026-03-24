@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import './Admin.css';
 import { API_URL } from '../config';
 import { Login } from './Login';
-import { LogOut } from 'lucide-react';
+import { LogOut, Edit2 } from 'lucide-react';
 
 interface Booking {
   id: string;
@@ -22,6 +22,24 @@ interface Dia {
   abierto: boolean;
   hora_inicio: string;
   hora_fin: string;
+}
+
+interface Servicio {
+  id: string;
+  nombre: string;
+  precio: number;
+  duracion_minutos: number;
+  vehiculo_id: string;
+  activo: boolean;
+  vehiculos?: { nombre: string }; // joined from backend
+  descripcion: string;
+  caracteristicas: string[];
+}
+
+interface Vehiculo {
+  id: string;
+  nombre: string;
+  icono: string;
 }
 
 export function Admin() {
@@ -44,12 +62,53 @@ export function Admin() {
   const [savingDia, setSavingDia] = useState(false);
   const [diaMsg, setDiaMsg] = useState({ text: '', type: '' });
 
+  // States - Servicios
+  const [servicios, setServicios] = useState<Servicio[]>([]);
+  const [vehiculos, setVehiculos] = useState<Vehiculo[]>([]);
+  const [loadingServicios, setLoadingServicios] = useState(true);
+  const [showServicioForm, setShowServicioForm] = useState(false);
+  const [servicioForm, setServicioForm] = useState<Partial<Servicio>>({
+    nombre: '',
+    descripcion: '',
+    caracteristicas: [],
+    precio: 0,
+    duracion_minutos: 30,
+    vehiculo_id: '',
+    activo: true
+  });
+  const [savingServicio, setSavingServicio] = useState(false);
+  const [servicioMsg, setServicioMsg] = useState({ text: '', type: '' });
+
   useEffect(() => {
     if (token) {
       fetchBookings();
       fetchDias();
+      fetchServicios();
+      fetchVehiculos();
     }
   }, [token]);
+
+  const fetchServicios = () => {
+    fetch(`${API_URL}/servicios/admin`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+      .then(res => res.json())
+      .then(data => {
+        setServicios(data || []);
+        setLoadingServicios(false);
+      })
+      .catch(err => {
+        console.error('Error fetching servicios:', err);
+        setLoadingServicios(false);
+      });
+  };
+
+  const fetchVehiculos = () => {
+    fetch(`${API_URL}/vehiculos`)
+      .then(res => res.json())
+      .then(data => setVehiculos(data || []))
+      .catch(console.error);
+  };
 
   const handleLogin = (newToken: string) => {
     localStorage.setItem('adminToken', newToken);
@@ -141,6 +200,75 @@ export function Admin() {
     }
   };
 
+  const handleServicioChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value, type } = e.target;
+    let finalValue: any = value;
+    
+    if (type === 'checkbox') {
+      finalValue = (e.target as HTMLInputElement).checked;
+    } else if (type === 'number') {
+      finalValue = Number(value);
+    }
+
+    setServicioForm(prev => ({
+      ...prev,
+      [name]: finalValue
+    }));
+  };
+
+  const handleSubmitServicio = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingServicio(true);
+    setServicioMsg({ text: '', type: '' });
+
+    try {
+      const url = servicioForm.id 
+        ? `${API_URL}/servicios/${servicioForm.id}`
+        : `${API_URL}/servicios`;
+      const method = servicioForm.id ? 'PUT' : 'POST';
+
+      const bodyPayload = {
+        ...servicioForm,
+        caracteristicas: Array.isArray(servicioForm.caracteristicas) 
+          ? servicioForm.caracteristicas.map(i => i.trim()).filter(Boolean) 
+          : []
+      };
+
+      const resp = await fetch(url, {
+        method,
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}` 
+        },
+        body: JSON.stringify(bodyPayload)
+      });
+
+      if (!resp.ok) {
+        if (resp.status === 401 || resp.status === 403) handleLogout();
+        const err = await resp.json();
+        throw new Error(err.error || 'Error al guardar el servicio');
+      }
+
+      setServicioMsg({ text: 'Servicio guardado correctamente', type: 'success' });
+      fetchServicios();
+      setTimeout(() => {
+        setShowServicioForm(false);
+        setServicioMsg({ text: '', type: '' });
+      }, 1500);
+    } catch (err: any) {
+      setServicioMsg({ text: err.message, type: 'error' });
+    } finally {
+      setSavingServicio(false);
+    }
+  };
+
+  const handleEditServicio = (srv: Servicio) => {
+    setServicioForm(srv);
+    setShowServicioForm(true);
+    setServicioMsg({ text: '', type: '' });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   if (!token) {
     return <Login onLogin={handleLogin} />;
   }
@@ -179,6 +307,12 @@ export function Admin() {
           onClick={() => setActiveTab('dias')}
         >
           Días y Horarios
+        </button>
+        <button 
+          className={`tab-btn ${activeTab === 'servicios' as any ? 'active' : ''}`}
+          onClick={() => setActiveTab('servicios' as any)}
+        >
+          Servicios
         </button>
       </div>
 
@@ -245,7 +379,7 @@ export function Admin() {
               <div className="form-grid">
                 <div className="input-group">
                   <label htmlFor="fecha">Fecha</label>
-                  <input type="date" id="fecha" name="fecha" required value={diaForm.fecha} onChange={handleDiaChange} />
+                  <input type="date" id="fecha" name="fecha" required min={new Date(new Date().toLocaleString("en-US", { timeZone: "America/Argentina/Buenos_Aires" })).toLocaleDateString('en-CA')} value={diaForm.fecha} onChange={handleDiaChange} />
                 </div>
                 <div className="input-group check-group">
                   <label>
@@ -303,6 +437,133 @@ export function Admin() {
                         </td>
                         <td>{d.abierto ? d.hora_inicio.substring(0,5) : '-'}</td>
                         <td>{d.abierto ? d.hora_fin.substring(0,5) : '-'}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
+
+        {activeTab === 'servicios' as any && (
+          <section className="admin-section glass-panel animate-fade-in">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+              <div>
+                <h2>Gestión de Servicios</h2>
+                <p style={{ color: 'var(--text-secondary)' }}>Añade, edita o deshabilita servicios.</p>
+              </div>
+              <button 
+                className="btn-primary" 
+                onClick={() => {
+                  setServicioForm({ nombre: '', descripcion: '', caracteristicas: [], precio: 0, duracion_minutos: 30, vehiculo_id: vehiculos[0]?.id || '', activo: true });
+                  setShowServicioForm(true);
+                  setServicioMsg({ text: '', type: '' });
+                }}
+              >
+                + Añadir Servicio
+              </button>
+            </div>
+
+            {showServicioForm && (
+              <form className="dia-form" onSubmit={handleSubmitServicio} style={{ marginBottom: '3rem', border: '1px solid rgba(255,255,255,0.1)', padding: '1.5rem', borderRadius: '12px' }}>
+                <h3 style={{ marginBottom: '1rem' }}>{servicioForm.id ? 'Editar Servicio' : 'Nuevo Servicio'}</h3>
+                
+                <div className="form-grid">
+                  <div className="input-group">
+                    <label>Nombre del Servicio</label>
+                    <input type="text" name="nombre" required value={servicioForm.nombre || ''} onChange={handleServicioChange} />
+                  </div>
+                  <div className="input-group">
+                    <label>Precio ($)</label>
+                    <input type="number" name="precio" required min="0" value={servicioForm.precio || 0} onChange={handleServicioChange} />
+                  </div>
+                  <div className="input-group" style={{ gridColumn: '1 / -1' }}>
+                    <label>Descripción</label>
+                    <textarea name="descripcion" rows={2} required value={servicioForm.descripcion || ''} onChange={handleServicioChange} style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', background: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)', color: 'white', fontFamily: 'inherit', resize: 'vertical' }} />
+                  </div>
+                  <div className="input-group" style={{ gridColumn: '1 / -1' }}>
+                    <label>Ítems del Servicio (uno por línea)</label>
+                    <textarea name="caracteristicas" rows={4} placeholder="Ej:&#10;Lavado exterior&#10;Aspirado interior" required value={Array.isArray(servicioForm.caracteristicas) ? servicioForm.caracteristicas.join('\n') : ''} onChange={(e) => {
+                      setServicioForm(prev => ({ ...prev, caracteristicas: e.target.value.split('\n') }));
+                    }} style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', background: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)', color: 'white', fontFamily: 'inherit', resize: 'vertical' }} />
+                  </div>
+                  <div className="input-group">
+                    <label>Duración (Minutos)</label>
+                    <input type="number" name="duracion_minutos" required min="1" value={servicioForm.duracion_minutos || 30} onChange={handleServicioChange} />
+                  </div>
+                  <div className="input-group">
+                    <label>Tipo de Vehículo</label>
+                    <select name="vehiculo_id" required value={servicioForm.vehiculo_id || ''} onChange={handleServicioChange} style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', background: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)', color: 'white' }}>
+                      <option value="" disabled>Seleccione un vehículo</option>
+                      {vehiculos.map(v => (
+                        <option key={v.id} value={v.id}>{v.nombre}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="input-group check-group">
+                    <label>
+                      <input type="checkbox" name="activo" checked={!!servicioForm.activo} onChange={handleServicioChange} /> 
+                      Servicio Activo
+                    </label>
+                  </div>
+                </div>
+
+                {servicioMsg.text && (
+                  <div style={{ marginTop: '1rem', padding: '1rem', borderRadius: '8px', background: servicioMsg.type === 'error' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(16, 185, 129, 0.1)', color: servicioMsg.type === 'error' ? '#fca5a5' : '#6ee7b7' }}>
+                    {servicioMsg.text}
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
+                  <button type="submit" className="btn-primary" disabled={savingServicio}>
+                    {savingServicio ? 'Guardando...' : 'Guardar Servicio'}
+                  </button>
+                  <button type="button" className="btn-secondary" onClick={() => setShowServicioForm(false)}>
+                    Cancelar
+                  </button>
+                </div>
+              </form>
+            )}
+
+            <div className="table-responsive">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Nombre</th>
+                    <th>Vehículo</th>
+                    <th>Precio</th>
+                    <th>Duración</th>
+                    <th>Estado</th>
+                    <th>Acción</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loadingServicios ? (
+                    <tr>
+                      <td colSpan={6} className="text-center" style={{ padding: '2rem' }}>Cargando...</td>
+                    </tr>
+                  ) : servicios.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="text-center" style={{ padding: '2rem' }}>No hay servicios configurados.</td>
+                    </tr>
+                  ) : (
+                    servicios.map(s => (
+                      <tr key={s.id}>
+                        <td><strong>{s.nombre}</strong></td>
+                        <td>{s.vehiculos?.nombre || s.vehiculo_id}</td>
+                        <td>${s.precio}</td>
+                        <td>{s.duracion_minutos} min</td>
+                        <td>
+                          <span className={`status-badge status-${s.activo ? 'confirmado' : 'cancelado'}`}>
+                            {s.activo ? 'Activo' : 'Inactivo'}
+                          </span>
+                        </td>
+                        <td>
+                          <button className="btn-outline" style={{ padding: '0.4rem', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => handleEditServicio(s)} title="Editar Servicio">
+                            <Edit2 size={16} />
+                          </button>
+                        </td>
                       </tr>
                     ))
                   )}

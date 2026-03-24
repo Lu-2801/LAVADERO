@@ -233,7 +233,7 @@ export function Booking() {
                       id="date"
                       name="date"
                       required
-                      min={new Date().toISOString().split('T')[0]}
+                      min={new Date(new Date().toLocaleString("en-US", { timeZone: "America/Argentina/Buenos_Aires" })).toLocaleDateString('en-CA')}
                       value={formData.date}
                       onChange={handleInputChange}
                       style={{ paddingRight: '2.5rem' }}
